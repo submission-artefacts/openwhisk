@@ -209,6 +209,12 @@ class MesosTask(override protected val id: ContainerId,
     // resume not supported (just return result from super)
   }
 
+  /** Only doing this to bypass error. */
+  override def update(cpus: Float, memory: ByteSize)(implicit transid: TransactionId): Future[Unit] = {
+    super.update(cpus: Float, memory: ByteSize)
+    // update not supported
+  }
+
   /** Completely destroys this instance of the container. */
   override def destroy()(implicit transid: TransactionId): Future[Unit] = {
     MesosTask.destroy(mesosClientActor, mesosConfig, taskId)

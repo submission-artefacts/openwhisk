@@ -101,6 +101,10 @@ trait Container {
     Future.successful({})
   }
 
+  def update(cpus: Float, memory: ByteSize)(implicit transid: TransactionId): Future[Unit] = {
+    Future.successful({})
+  }
+
   /** Obtains logs up to a given threshold from the container. Optionally waits for a sentinel to appear. */
   def logs(limit: ByteSize, waitForSentinel: Boolean)(implicit transid: TransactionId): Source[ByteString, Any]
 

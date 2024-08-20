@@ -38,6 +38,7 @@ import akka.stream.ActorMaterializer
 import java.net.InetSocketAddress
 import java.net.SocketException
 
+import org.apache.openwhisk.predictor.PredictorReactive
 import org.apache.openwhisk.common.MetricEmitter
 import org.apache.openwhisk.common.TransactionId.systemPrefix
 
@@ -47,12 +48,7 @@ import spray.json._
 import org.apache.openwhisk.common.{AkkaLogging, Counter, LoggingMarkers, TransactionId}
 import org.apache.openwhisk.core.ConfigKeys
 import org.apache.openwhisk.core.ack.ActiveAck
-import org.apache.openwhisk.core.connector.{
-  ActivationMessage,
-  CombinedCompletionAndResultMessage,
-  CompletionMessage,
-  ResultMessage
-}
+import org.apache.openwhisk.core.connector.{ActivationMessage, CombinedCompletionAndResultMessage, CompletionMessage, ResultMessage}
 import org.apache.openwhisk.core.containerpool.logging.LogCollectingException
 import org.apache.openwhisk.core.database.UserContext
 import org.apache.openwhisk.core.entity.ExecManifest.ImageName
@@ -260,7 +256,8 @@ class ContainerProxy(factory: (TransactionId,
                      healtCheckConfig: ContainerProxyHealthCheckConfig,
                      unusedTimeout: FiniteDuration,
                      pauseGrace: FiniteDuration,
-                     testTcp: Option[ActorRef])
+                     testTcp: Option[ActorRef],
+                     predictorReactive: PredictorReactive)
     extends FSM[ContainerState, ContainerData]
     with Stash {
   implicit val ec = context.system.dispatcher
@@ -276,6 +273,7 @@ class ContainerProxy(factory: (TransactionId,
   var activeCount = 0;
   var healthPingActor: Option[ActorRef] = None //setup after prewarm starts
   val tcp: ActorRef = testTcp.getOrElse(IO(Tcp)) //allows to testing interaction with Tcp extension
+
 
   startWith(Uninitialized, NoData())
 
@@ -301,6 +299,14 @@ class ContainerProxy(factory: (TransactionId,
       implicit val transid = job.msg.transid
       activeCount += 1
       // create a new container
+//      val unlockedContent = job.msg.content match {
+//        case Some(js) => {
+//          Some(ParameterEncryption.unlock(Parameters.readMergedList(js)).toJsObject)
+//        }
+//        case _ => job.msg.content
+//      }
+//      val (env, parameters) = ContainerProxy.partitionArguments(unlockedContent, job.msg.initArgs)
+//      val nextConfig = predictorReactive.queryForConfig(job.action.name.asString, parameters)
       val container = factory(
         job.msg.transid,
         ContainerProxy.containerName(instance, job.msg.user.namespace.name.asString, job.action.name.asString),
@@ -508,6 +514,15 @@ class ContainerProxy(factory: (TransactionId,
       implicit val transid = job.msg.transid
       activeCount += 1
       val newData = data.withResumeRun(job)
+//      val unlockedContent = job.msg.content match {
+//        case Some(js) => {
+//          Some(ParameterEncryption.unlock(Parameters.readMergedList(js)).toJsObject)
+//        }
+//        case _ => job.msg.content
+//      }
+//      val (env, parameters) = ContainerProxy.partitionArguments(unlockedContent, job.msg.initArgs)
+//      val nextConfig = predictorReactive.queryForConfig(job.action.name.asString, parameters)
+//      data.container.update(nextConfig.cpus, nextConfig.memory.MB)
       initializeAndRun(data.container, job, true)
         .map(_ => RunCompleted)
         .pipeTo(self)
@@ -537,6 +552,16 @@ class ContainerProxy(factory: (TransactionId,
       implicit val transid = job.msg.transid
       activeCount += 1
       val newData = data.withResumeRun(job)
+//      val nextConfig = predictorReactive.queryForConfig(data.container.containerId.asString)
+//      val unlockedContent = job.msg.content match {
+//        case Some(js) => {
+//          Some(ParameterEncryption.unlock(Parameters.readMergedList(js)).toJsObject)
+//        }
+//        case _ => job.msg.content
+//      }
+//      val (env, parameters) = ContainerProxy.partitionArguments(unlockedContent, job.msg.initArgs)
+//      val nextConfig = predictorReactive.queryForConfig(job.action.name.asString, parameters)
+//      data.container.update(nextConfig.cpus, nextConfig.memory.MB)
       data.container
         .resume()
         .andThen {
@@ -781,7 +806,8 @@ class ContainerProxy(factory: (TransactionId,
     }
 
     val (env, parameters) = ContainerProxy.partitionArguments(unlockedContent, job.msg.initArgs)
-
+    val nextConfig = predictorReactive.queryForConfig(job.action.name.asString, parameters)
+    container.update(nextConfig.cpus, nextConfig.memory.MB)
     val environment = Map(
       "namespace" -> job.msg.user.namespace.name.toJson,
       "action_name" -> job.msg.action.qualifiedNameWithLeadingSlash.toJson,
@@ -837,6 +863,7 @@ class ContainerProxy(factory: (TransactionId,
             reschedule)(job.msg.transid)
           .map {
             case (runInterval, response) =>
+              predictorReactive.recordPerformance(job.action.name.asString, runInterval.duration.toString, parameters, nextConfig)
               val initRunInterval = initInterval
                 .map(i => Interval(runInterval.start.minusMillis(i.duration.toMillis), runInterval.end))
                 .getOrElse(runInterval)
@@ -980,10 +1007,12 @@ object ContainerProxy {
             collectLogs: LogsCollector,
             instance: InvokerInstanceId,
             poolConfig: ContainerPoolConfig,
+            predictorReactive: PredictorReactive,
             healthCheckConfig: ContainerProxyHealthCheckConfig =
               loadConfigOrThrow[ContainerProxyHealthCheckConfig](ConfigKeys.containerProxyHealth),
             unusedTimeout: FiniteDuration = timeouts.idleContainer,
             pauseGrace: FiniteDuration = timeouts.pauseGrace,
+
             tcp: Option[ActorRef] = None) =
     Props(
       new ContainerProxy(
@@ -996,7 +1025,8 @@ object ContainerProxy {
         healthCheckConfig,
         unusedTimeout,
         pauseGrace,
-        tcp))
+        tcp,
+        predictorReactive))
 
   // Needs to be thread-safe as it's used by multiple proxies concurrently.
   private val containerCount = new Counter

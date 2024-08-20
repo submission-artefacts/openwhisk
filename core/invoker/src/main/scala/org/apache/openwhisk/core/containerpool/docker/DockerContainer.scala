@@ -88,8 +88,10 @@ object DockerContainer {
     // NOTE: --dns-option on modern versions of docker, but is --dns-opt on docker 1.12
     val dnsOptString = if (docker.clientVersion.startsWith("1.12")) { "--dns-opt" } else { "--dns-option" }
     val args = Seq(
-      "--cpu-shares",
-      cpuShares.toString,
+//      "--cpu-shares",
+//      cpuShares.toString,
+      "--cpus",
+      "4",
       "--memory",
       s"${memory.toMB}m",
       "--memory-swap",
@@ -185,6 +187,10 @@ class DockerContainer(protected val id: ContainerId,
   }
   override def resume()(implicit transid: TransactionId): Future[Unit] = {
     (if (useRunc) { runc.resume(id) } else { docker.unpause(id) }).flatMap(_ => super.resume())
+  }
+
+  override def update(cpus: Float, memory: ByteSize)(implicit transid: TransactionId): Future[Unit] = {
+    docker.update(id, cpus, memory).flatMap(_ => super.resume())
   }
   override def destroy()(implicit transid: TransactionId): Future[Unit] = {
     super.destroy()

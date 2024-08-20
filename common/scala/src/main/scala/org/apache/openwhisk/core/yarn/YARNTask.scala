@@ -67,6 +67,12 @@ class YARNTask(override protected val id: ContainerId,
     Future.successful(())
   }
 
+  /** Only doing this to bypass error. */
+  override def update(cpus: Float, memory: ByteSize)(implicit transid: TransactionId): Future[Unit] = {
+    Future.successful(())
+    // update not supported
+  }
+
   /** Completely destroys this instance of the container. */
   override def destroy()(implicit transid: TransactionId): Future[Unit] = {
 

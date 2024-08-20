@@ -19,7 +19,6 @@ package org.apache.openwhisk.core.invoker
 
 import java.nio.charset.StandardCharsets
 import java.time.Instant
-
 import akka.Done
 import akka.actor.{ActorRefFactory, ActorSystem, CoordinatedShutdown, Props}
 import akka.event.Logging.InfoLevel
@@ -35,6 +34,7 @@ import org.apache.openwhisk.core.entity._
 import org.apache.openwhisk.core.entity.size._
 import org.apache.openwhisk.core.{ConfigKeys, WhiskConfig}
 import org.apache.openwhisk.http.Messages
+import org.apache.openwhisk.predictor.PredictorReactive
 import org.apache.openwhisk.spi.SpiLoader
 import pureconfig._
 import pureconfig.generic.auto._
@@ -138,6 +138,8 @@ class InvokerReactive(
     new MessagingActiveAck(producer, instance, sender)
   }
 
+  private val predictorReactive: PredictorReactive = new PredictorReactive()
+
   private val collectLogs = new LogStoreCollector(logsProvider)
 
   /** Stores an activation in the database. */
@@ -150,7 +152,7 @@ class InvokerReactive(
   private val childFactory = (f: ActorRefFactory) =>
     f.actorOf(
       ContainerProxy
-        .props(containerFactory.createContainer, ack, store, collectLogs, instance, poolConfig))
+        .props(containerFactory.createContainer, ack, store, collectLogs, instance, poolConfig, predictorReactive))
 
   val prewarmingConfigs: List[PrewarmingConfig] = {
     ExecManifest.runtimesManifest.stemcells.flatMap {

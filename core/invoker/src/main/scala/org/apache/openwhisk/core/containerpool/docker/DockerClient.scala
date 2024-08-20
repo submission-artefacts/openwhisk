@@ -38,6 +38,7 @@ import org.apache.openwhisk.common.{Logging, LoggingMarkers, MetricEmitter, Tran
 import org.apache.openwhisk.core.ConfigKeys
 import org.apache.openwhisk.core.containerpool.ContainerId
 import org.apache.openwhisk.core.containerpool.ContainerAddress
+import org.apache.openwhisk.core.entity.ByteSize
 
 import scala.concurrent.duration.Duration
 
@@ -171,6 +172,9 @@ class DockerClient(dockerHost: Option[String] = None,
   def unpause(id: ContainerId)(implicit transid: TransactionId): Future[Unit] =
     runCmd(Seq("unpause", id.asString), config.timeouts.unpause).map(_ => ())
 
+  def update(id: ContainerId, cpus: Float, memory: ByteSize)(implicit transid: TransactionId): Future[Unit] =
+    runCmd(Seq("update", "--cpus", cpus.toString, "--memory", s"${memory.toMB}m", id.asString), config.timeouts.unpause).map(_ => ())
+
   def rm(id: ContainerId)(implicit transid: TransactionId): Future[Unit] =
     runCmd(Seq("rm", "-f", id.asString), config.timeouts.rm).map(_ => ())
 
@@ -259,6 +263,8 @@ trait DockerApi {
    * @return a Future completing according to the command's exit-code
    */
   def unpause(id: ContainerId)(implicit transid: TransactionId): Future[Unit]
+
+  def update(id: ContainerId, cpus: Float, memory: ByteSize)(implicit transid: TransactionId): Future[Unit]
 
   /**
    * Removes the container with the given id.

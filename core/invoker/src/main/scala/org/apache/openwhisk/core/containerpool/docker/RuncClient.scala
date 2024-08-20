@@ -32,6 +32,7 @@ import pureconfig._
 import pureconfig.generic.auto._
 import akka.event.Logging.{ErrorLevel, InfoLevel}
 import org.apache.openwhisk.core.containerpool.ContainerId
+import org.apache.openwhisk.core.entity.ByteSize
 
 import scala.concurrent.duration.Duration
 
@@ -64,6 +65,10 @@ class RuncClient(timeouts: RuncClientTimeouts = loadConfigOrThrow[RuncClientTime
   def resume(id: ContainerId)(implicit transid: TransactionId): Future[Unit] =
     runCmd(Seq("resume", id.asString), timeouts.resume).map(_ => ())
 
+  def update(id: ContainerId, cpus: Float, memory: ByteSize)(implicit transid: TransactionId): Future[Unit] =
+    runCmd(Seq("update", "--cpuset-cpus", cpus.toString, "--memory", s"${memory.toMB}m", id.asString), timeouts.resume).map(_ => ())
+
+
   private def runCmd(args: Seq[String], timeout: Duration)(implicit transid: TransactionId): Future[String] = {
     val cmd = runcCmd ++ args
     val start = transid.started(
@@ -95,4 +100,6 @@ trait RuncApi {
    * @return a Future completing according to the command's exit-code
    */
   def resume(id: ContainerId)(implicit transid: TransactionId): Future[Unit]
+
+  def update(id: ContainerId, cpus: Float, memory: ByteSize)(implicit transid: TransactionId): Future[Unit]
 }

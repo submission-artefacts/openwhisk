@@ -39,6 +39,7 @@ dependencies {
 
     compile "com.typesafe.akka:akka-actor_${gradle.scala.depVersion}:${gradle.akka.version}"
     compile "com.typesafe.akka:akka-stream_${gradle.scala.depVersion}:${gradle.akka.version}"
+//    compile "com.typesafe.akka:akka-actor-typed_${gradle.scala.depVersion}:${gradle.akka.version}"
     compile "com.typesafe.akka:akka-slf4j_${gradle.scala.depVersion}:${gradle.akka.version}"
 
     compile "com.typesafe.akka:akka-http-core_${gradle.scala.depVersion}:${gradle.akka_http.version}"
@@ -95,7 +96,7 @@ dependencies {
     }
     compile "com.amazonaws:aws-java-sdk-cloudfront:1.11.517"
 
-    compile ("com.azure:azure-storage-blob:12.6.0") {
+    compile ("com.azure:azure-storage-blob:12.7.0") {
         exclude group: "com.azure", module: "azure-core-test"
     }
 }
